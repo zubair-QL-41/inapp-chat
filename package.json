@@ -1,0 +1,30 @@
+{
+  "name": "@zubair-nazir/inapp-chat",
+  "version": "1.1.0",
+  "description": "",
+  "main": "./lib/index.js",
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "tsc",
+    "start": "tsc & node ./lib/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/zubair-QL-41/inapp-chat.git"
+  },
+  "files": [
+    "lib/**/*"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zubair-QL-41/inapp-chat/issues"
+  },
+  "homepage": "https://github.com/zubair-QL-41/inapp-chat#readme",
+  "dependencies": {
+    "firebase-admin": "^11.10.1",
+    "jsonwebtoken": "^9.0.1",
+    "socket.io": "^4.7.2",
+    "typescript": "^5.1.6"
+  }
+}
