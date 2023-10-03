@@ -10,8 +10,8 @@ import jwt from "jsonwebtoken";
 
 import * as firebase from "firebase-admin";
 
-import {privateChatRequestMessage} from "./interface/privateChatMessageInterface"
-import {room} from "./interface/roomInterface"
+import { privateChatRequestMessage } from "./interface/privateChatMessageInterface";
+import { room } from "./interface/roomInterface";
 
 const chatUsers: any = {};
 
@@ -32,9 +32,9 @@ const initiateConnection = async (server: Server) => {
         io.emit("usersOnline", getOnlineUsers());
       }
 
-      socket.on("room", (data:room) => handleRoom(io,socket, data));
+      socket.on("room", (data: room) => handleRoom(io, socket, data));
 
-      socket.on("privateChatMessage", (data:privateChatRequestMessage) => {
+      socket.on("privateChatMessage", (data: privateChatRequestMessage) => {
         handlePrivateChat(socket, data);
       });
 
@@ -69,22 +69,27 @@ const getOnlineUsers = async () => {
 };
 
 const fetchUsersChat = async (userId: string, socket: SocketIO.Socket) => {
-  const privateChatsSnapshot = await db
-    .collection("privateChats")
-    .where("participants", "array-contains", userId)
-    .get();
-  const chatRoomsSnapshot = await db
-    .collection("chatRooms")
-    .where("participants", "array-contains", userId)
-    .get();
+  const [privateChatsSnapshot, chatRoomsSnapshot] = await Promise.all([
+    db
+      .collection("privateChats")
+      .where("participants", "array-contains", userId)
+      .get(),
+    db
+      .collection("chatRooms")
+      .where("participants", "array-contains", userId)
+      .get(),
+  ]);
   const privateChats = privateChatsSnapshot.docs.map((doc) => doc.data());
   const chatRoomChats = chatRoomsSnapshot.docs.map((doc) => doc.data());
-  const mergedChats = [...privateChats,...chatRoomChats];
-  mergedChats.sort((a,b)=>b.updatedAt.toMillis()- a.updatedAt.toMillis());
+  const mergedChats = [...privateChats, ...chatRoomChats];
+  mergedChats.sort((a, b) => b.updatedAt.toMillis() - a.updatedAt.toMillis());
   socket.emit("fetchChats", mergedChats);
 };
 
-const handlePrivateChat = async (socket: SocketIO.Socket, data: privateChatRequestMessage) => {
+const handlePrivateChat = async (
+  socket: SocketIO.Socket,
+  data: privateChatRequestMessage
+) => {
   const { receiverId, message } = data;
   const senderId = chatUsers[socket.id].userId;
   const participants = [senderId, receiverId].sort();
@@ -133,49 +138,69 @@ const handlePrivateChat = async (socket: SocketIO.Socket, data: privateChatReque
       );
 };
 
-const handleRoom = async (io: SocketIO.Server,socket: SocketIO.Socket, data: room) => {
-  const { room, action,message } = data;
-  const participant = chatUsers[socket.id].userId
+const handleRoom = async (
+  io: SocketIO.Server,
+  socket: SocketIO.Socket,
+  data: room
+) => {
+  const { room, action, message } = data;
+  let participantExists = false;
+  const participant = chatUsers[socket.id].userId;
   const chatRoomRef = db.collection("chatRooms").doc(room);
   if (action === "join") {
     const chatRoomSnapshot = await chatRoomRef.get();
-    if (!chatRoomSnapshot.exists)
+    if (!chatRoomSnapshot.exists) {
+      participantExists = true;
       await chatRoomRef.set({
         updatedAt: new Date(),
-        participants:[participant],
-        messages:[]
+        participants: [participant],
+        messages: [],
       });
-    else
+    } else {
+      participantExists = db
+        .collection("chatRooms")
+        .where("participants", "array-contains", `${participant}`)
+        ? true
+        : false;
       await chatRoomRef.update({
-        participants : firebase.firestore.FieldValue.arrayUnion(participant),
+        participants: firebase.firestore.FieldValue.arrayUnion(participant),
       });
-    socket.join(room);
-    socket
-      .to(room)
-      .emit("room", `${chatUsers[socket.id].userName} joined room`);
+    }
+    if (!participantExists) {
+      socket.join(room);
+      socket
+        .to(room)
+        .emit("room", `${chatUsers[socket.id].userName} joined room`);
+    }
   } else if (action === "leave") {
-    socket.leave(room);
-    socket.to(room).emit("room", `${chatUsers[socket.id].userName} left room: ${room}`);
-    await chatRoomRef.update({
-      participants : firebase.firestore.FieldValue.arrayRemove(participant),
-    });
-  }else if(action === 'send'){
-    console.log("Received chat room message:", message);
+    let participantExists = db
+      .collection("chatRooms")
+      .where("participants", "array-contains", `${participant}`)
+      ? true
+      : false;
+    if (participantExists) {
+      socket.leave(room);
+      socket
+        .to(room)
+        .emit("room", `${chatUsers[socket.id].userName} left room: ${room}`);
       await chatRoomRef.update({
-        updatedAt: new Date(),
-        messages: firebase.firestore.FieldValue.arrayUnion({
-          userName: chatUsers[socket.id].userName,
-          content: message,
-          timestamp: new Date(),
-        }),
+        participants: firebase.firestore.FieldValue.arrayRemove(participant),
       });
-  
+    }
+  } else if (action === "send") {
+    console.log("Received chat room message:", message);
+    await chatRoomRef.update({
+      updatedAt: new Date(),
+      messages: firebase.firestore.FieldValue.arrayUnion({
+        userName: chatUsers[socket.id].userName,
+        content: message,
+        timestamp: new Date(),
+      }),
+    });
+
     // broadcast message
-  
-    io.to(room).emit(
-      "room",
-      `${chatUsers[socket.id].userName}:${message}`
-    );
+
+    io.to(room).emit("room", `${chatUsers[socket.id].userName}:${message}`);
   }
 };
 
