@@ -10,7 +10,7 @@ import jwt from "jsonwebtoken";
 
 import * as firebase from "firebase-admin";
 
-import {privateChatMessage} from "./interface/privateChatMessageInterface"
+import {privateChatRequestMessage} from "./interface/privateChatMessageInterface"
 import {room} from "./interface/roomInterface"
 
 const chatUsers: any = {};
@@ -34,7 +34,7 @@ const initiateConnection = async (server: Server) => {
 
       socket.on("room", (data:room) => handleRoom(io,socket, data));
 
-      socket.on("privateChatMessage", (data:privateChatMessage) => {
+      socket.on("privateChatMessage", (data:privateChatRequestMessage) => {
         handlePrivateChat(socket, data);
       });
 
@@ -84,7 +84,7 @@ const fetchUsersChat = async (userId: string, socket: SocketIO.Socket) => {
   socket.emit("fetchChats", mergedChats);
 };
 
-const handlePrivateChat = async (socket: SocketIO.Socket, data: privateChatMessage) => {
+const handlePrivateChat = async (socket: SocketIO.Socket, data: privateChatRequestMessage) => {
   const { receiverId, message } = data;
   const senderId = chatUsers[socket.id].userId;
   const participants = [senderId, receiverId].sort();
