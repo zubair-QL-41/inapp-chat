@@ -54,4 +54,62 @@ environments.
 
 ## Documentation
 
+## Client connection with server
+For connecting user with socket server, client needs to pass params and authorization token in header of connection url.
+## Connection url
+Example: http://${baseUrl:port}?userId=${userId}&userName=${userName}
+```js
+http://localhost:3000?userId=2&userName=Sumit
 ```
+## Headers of connection url
+Authorization: ${jwt-token}
+
+## Events
+There are 3 events that needs to be followed by client as per the docs here.
+1. room (responsible for handling chat room messages)
+2. privateChatMessage (responsible for handling private messages or one to one messages)
+3. fetchChats (responsible for fetching chat history)
+
+## room event
+For joining a particular room, pass a json data on room event
+```js
+{
+    "action":"join",
+    "room":"room1"
+}
+```
+
+For sending a message in room, pass a json data on room event
+```js
+{
+    "action":"send",
+    "room":"room1",
+    "message":"Hi, How are you"
+}
+```
+For leaving a room, pass a json data on room event
+```js
+{
+    "action":"leave",
+    "room":"room1"
+}
+```
+
+## fetchUserChats event
+
+For fetching message history, trigger the fetchUserChats event without any data
+```js
+
+```
+
+## privateChatMessage event
+
+For sending a one to one message to user, pass json data on privateChatMessage event
+```js
+{
+    "receiverId":"3",
+    "message":"hey u there"
+}
+```
+
+
