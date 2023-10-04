@@ -24,6 +24,9 @@ const initiateConnection = async (server: Server) => {
 
       const userName = socket.handshake.query.userName;
 
+      const chatRoomSnapshot = await db.collection("chatRooms").where("participants","array-contains", userId).get();
+      chatRoomSnapshot.docs.map((doc) => socket.join(doc.id));
+
       if (userId && userName) {
         chatUsers[socket.id] = { userId, userName };
 
@@ -144,63 +147,53 @@ const handleRoom = async (
   data: room
 ) => {
   const { room, action, message } = data;
-  let participantExists = false;
   const participant = chatUsers[socket.id].userId;
   const chatRoomRef = db.collection("chatRooms").doc(room);
   if (action === "join") {
     const chatRoomSnapshot = await chatRoomRef.get();
     if (!chatRoomSnapshot.exists) {
-      participantExists = true;
       await chatRoomRef.set({
         updatedAt: new Date(),
         participants: [participant],
         messages: [],
       });
     } else {
-      participantExists = db
-        .collection("chatRooms")
-        .where("participants", "array-contains", `${participant}`)
-        ? true
-        : false;
       await chatRoomRef.update({
         participants: firebase.firestore.FieldValue.arrayUnion(participant),
       });
     }
-    if (!participantExists) {
-      socket.join(room);
-      socket
-        .to(room)
-        .emit("room", `${chatUsers[socket.id].userName} joined room`);
-    }
+    socket.join(room);
+    socket
+      .to(room)
+      .emit("room", `${chatUsers[socket.id].userName} joined room`);
   } else if (action === "leave") {
-    let participantExists = db
-      .collection("chatRooms")
-      .where("participants", "array-contains", `${participant}`)
-      ? true
-      : false;
-    if (participantExists) {
-      socket.leave(room);
-      socket
-        .to(room)
-        .emit("room", `${chatUsers[socket.id].userName} left room: ${room}`);
-      await chatRoomRef.update({
-        participants: firebase.firestore.FieldValue.arrayRemove(participant),
-      });
-    }
-  } else if (action === "send") {
-    console.log("Received chat room message:", message);
+    await socket.leave(room);
+    socket
+      .to(room)
+      .emit("room", `${chatUsers[socket.id].userName} left room: ${room}`);
     await chatRoomRef.update({
-      updatedAt: new Date(),
-      messages: firebase.firestore.FieldValue.arrayUnion({
-        userName: chatUsers[socket.id].userName,
-        content: message,
-        timestamp: new Date(),
-      }),
+      participants: firebase.firestore.FieldValue.arrayRemove(participant),
     });
+  } else if (action === "send") {
+    let participantExists = false;
+    await chatRoomRef.get().then((doc)=>{
+      participantExists = doc.data()?.participants.includes(participant) ? true : false
+    })
+    if (participantExists) {
+      console.log("Received chat room message:", message);
+      await chatRoomRef.update({
+        updatedAt: new Date(),
+        messages: firebase.firestore.FieldValue.arrayUnion({
+          userName: chatUsers[socket.id].userName,
+          content: message,
+          timestamp: new Date(),
+        }),
+      });
 
-    // broadcast message
+      // broadcast message
 
-    io.to(room).emit("room", `${chatUsers[socket.id].userName}:${message}`);
+      io.to(room).emit("room", `${chatUsers[socket.id].userName}:${message}`);
+    }
   }
 };
 
